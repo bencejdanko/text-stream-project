@@ -1,0 +1,6 @@
+venv
+__pycache__
+logs/
+data
+**/__pycache__/
+**/chk-point-dir

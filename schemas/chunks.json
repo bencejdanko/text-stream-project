@@ -1,0 +1,8 @@
+{
+    "fields": [
+        { "name": "agent_id", "type": "string" },
+        { "name": "timestamp", "type": "string" },
+        { "name": "destination_uri", "type": "string" },
+        { "name": "chunk", "type": "string" }
+    ]
+}
