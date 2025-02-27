@@ -15,15 +15,22 @@ from pyspark.sql.functions import when
 
 from pyhive import hive
 
-import json
-
 import argparse
+import json
+import re
+
+def clean_text(text):
+    # Remove anything that isn't a letter, number, or space
+    text = re.sub(r'[^a-zA-Z0-9 ]', '', text)
+    # Replace multiple spaces with a single space
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 HIVE_PORT = None
 HIVE_TABLE = None
 
-
 def cluster_batch(batch_df, batch_id):
+    print("Batch encounter")
     if batch_df.isEmpty():
         return
 
@@ -31,13 +38,34 @@ def cluster_batch(batch_df, batch_id):
     
     model = pipeline.fit(batch_df)
     clustered_df = model.transform(batch_df)
-    with hive.Connection(host='localhost', port=HIVE_PORT) as conn:
-            with conn.cursor() as cursor:
-                for row in clustered_df.collect():
-                    cursor.execute(f"""
-                        INSERT INTO {HIVE_TABLE} VALUES 
-                        ('{row.agent_id}', '{row.destination_uri}', '{row.event_time}', '{row.chunk}', '{row.cluster}')
-                    """)
+    with hive.Connection(host='localhost', username='root', port=HIVE_PORT) as conn:
+            
+            data_to_insert = [
+                (
+                    row.agent_id,
+                    row.destination_uri,
+                    row.event_time,
+                    clean_text(row.chunk),  # Cleaned chunk
+                    row.cluster
+                )
+                for row in clustered_df.collect()
+            ]
+
+            if data_to_insert:  # Ensure data exists before inserting
+            
+                values_str = ",".join(
+                    f"('{row[0]}', '{row[1]}', '{row[2]}', '{row[3]}', {row[4]})"
+                    for row in data_to_insert
+                )
+                
+                sql = f"""
+                    INSERT INTO `{HIVE_TABLE}` (agent_id, destination_uri, event_time, chunk, cluster)
+                    VALUES {values_str}
+                """
+
+                with conn.cursor() as cursor:
+                    cursor.execute(sql)  # Use execute instead of executemany()
+
 
 def load_schema_from_json(file_path):
     with open(file_path, 'r') as f:
