@@ -19,7 +19,7 @@ if __name__ == "__main__":
     parser.add_argument("--kafka-broker-port", type=str, help="Kafka broker to write logs to.", required=True)
     parser.add_argument("--topic", type=str, help="Kafka topic to write to.", required=True)
     
-    parser.add_argument("--hive-port", type=str, required=True, help="HiveServer2 port.")
+    parser.add_argument("--hive-metastore-port", type=str, required=True, help="Hive metastore port.")
     parser.add_argument("--hive-db", type=str, required=True, help="Hive database.")
     parser.add_argument("--hive-table", type=str, required=True, help="Hive table name.")
     
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     KAFKA_BROKER_PORT = args.kafka_broker_port
     KAFKA_TOPIC = args.topic
 
-    HIVE_PORT = args.hive_port
+    HIVE_PORT = args.hive_metastore_port
     HIVE_DB = args.hive_db
     HIVE_TABLE = args.hive_table
 
@@ -40,11 +40,21 @@ if __name__ == "__main__":
     json_schema = load_schema_from_json(SCHEMA_FILE)
 
     # Initialize Spark session
-    spark = SparkSession.builder \
-        .appName("KafkaJSONConsumer") \
-        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0") \
-        .getOrCreate()
+    if HIVE_PORT:
+        spark = SparkSession.builder \
+            .appName("KafkaToHive") \
+            .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0") \
+            .config("hive.metastore.uris", f"thrift://localhost:{HIVE_PORT}") \
+            .config("spark.sql.catalogImplementation", "hive") \
+            .enableHiveSupport() \
+            .getOrCreate()
+    else:
+        spark = SparkSession.builder \
+            .appName("KafkaJSONConsumer") \
+            .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0") \
+            .getOrCreate()
 
+    print(f"\033[92mSUBSCRIBING TO KAFKA TOPIC: {KAFKA_TOPIC} AT BROKER: {KAFKA_BROKER_PORT}\033[0m")
     # Read from Kafka topic
     df = spark.readStream \
         .format("kafka") \
@@ -66,14 +76,13 @@ if __name__ == "__main__":
             .option("checkpointLocation", "chk-point-dir") \
             .start()
         
-    # else:
-    #     # Write to Hive table
-    #     query = df_parsed.writeStream \
-    #         .outputMode("append") \
-    #         .format("parquet") \
-    #         .option("path", "/tmp/parquet") \
-    #         .option("checkpointLocation", "chk-point-dir") \
-    #         .table(f"{args.hive_db}.{args.hive_table}")
+    if HIVE_DB and HIVE_TABLE:
+        # Write to Hive table
+        query = df_parsed.writeStream \
+            .outputMode("append") \
+            .format("hive") \
+            .option("checkpointLocation", "chk-point-dir") \
+            .toTable(f"{HIVE_DB}.{HIVE_TABLE}")
 
     #Write to console
     query = df_parsed.writeStream \

@@ -38,7 +38,7 @@ This script starts a parallelized script to read from each of the files listed b
 ## Starting the consumer
 
 ```
-bin/start_consumer.sh -s schemas/chunks.json -k 9092 -t chunks -l logs/consumer -hp 10000 -hd main -ht Chunks
+bin/start_consumer.sh --schema-file schemas/chunks.json --kafka-broker-port 9092 --topic chunks --logs-dir logs/consumer --hive-metastore-port 9083 --hive-db default --hive-table chunks
 ```
 
 The consumer is conducting

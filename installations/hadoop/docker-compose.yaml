@@ -1,92 +1,48 @@
-version: '3'
+version: '3.7'
+
 services:
-  namenode:
-    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
-    container_name: namenode
-    environment:
-      - CLUSTER_NAME=test
-    ports:
-      - "9870:9870"
-      - "9000:9000"
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-    volumes:
-      - namenode:/hadoop/dfs/name
-
-  datanode:
-    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
-    container_name: datanode
-    environment:
-      - CLUSTER_NAME=test
-      - NAMENODE_HOST=namenode
-    ports:
-      - "9864:9864"
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-    volumes:
-      - datanode:/hadoop/dfs/data
+  hive:
+    image: ${HIVE_IMAGE:-mtsrus/hadoop:hadoop2-hive}
+    restart: no
+    container_name: hive
+    hostname: hive
     depends_on:
-      - namenode
+      - postgres
+    environment:
+      WITH_HIVE_SERVER: 'true'
+      WITH_HIVE_METASTORE_SERVER: 'true'
+      HIVE_METASTORE_DB_URL: jdbc:postgresql://postgres:5432/metastore
+      HIVE_METASTORE_DB_DRIVER: org.postgresql.Driver
+      HIVE_METASTORE_DB_USER: hive
+      HIVE_METASTORE_DB_PASSWORD: hive
+    ports:
+      - 9820:9820 # HDFS IPC
+      - 9870:9870 # HDFS WebHDFS
+    # if WITH_HIVE_SERVER=true
+      - 8088:8088 # Yarn UI
+      - 8042:8042 # NodeManager UI
+      - 10000:10000 # Hive server
+      - 10002:10002 # Hive server Admin UI
+      - 19888:19888 # MapReduce JobServer History UI
+    # if WITH_HIVE_METASTORE_SERVER=true
+      - 9083:9083 # Hive Metastore server
+    volumes:
+      # put some .xml files in /var/hive/conf/ to override defaults
+      - ./conf/hive/:/var/hive/conf/
+      - hadoop-data:/var/hadoop/data/
 
-  hive-metastore-postgresql:
-    image: postgres:12
-    container_name: hive-metastore-postgresql
+  postgres:
+    image: postgres:alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: metastore
       POSTGRES_USER: hive
       POSTGRES_PASSWORD: hive
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
+    ports:
+      - 5432:5432
     volumes:
-      - metastore_db:/var/lib/postgresql/data
-
-  hive-metastore:
-    image: bde2020/hive:2.3.2-postgresql-metastore
-    container_name: hive-metastore
-    environment:
-      - HIVE_METASTORE_DB_TYPE=postgres
-      - HIVE_METASTORE_DB_HOST=hive-metastore-postgresql
-      - HIVE_METASTORE_DB_NAME=metastore
-      - HIVE_METASTORE_DB_USER=hive
-      - HIVE_METASTORE_DB_PASS=hive
-      - HIVE_METASTORE_URI=thrift://hive-metastore:9083
-    ports:
-      - "9083:9083"
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-    depends_on:
-      - hive-metastore-postgresql
-      - namenode
-
-  hive-server:
-    image: bde2020/hive:2.3.2-postgresql-metastore
-    container_name: hive-server
-    environment:
-      - HIVE_METASTORE_URI=thrift://hive-metastore:9083
-    ports:
-      - "10000:10000"
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-    depends_on:
-      - hive-metastore
-      - datanode
+      - postgres-data:/var/lib/postgresql/data
 
 volumes:
-  namenode:
-  datanode:
-  metastore_db:
+  hadoop-data:
+  postgres-data:

@@ -40,7 +40,7 @@ def fetch_file(file, agent_id, destination_uri):
 
                 try:
                     data = json.loads(chunk)
-                    data.update({"agent_id": agent_id, "destination_uri": destination_uri, "timestamp": datetime.now().isoformat()})
+                    data.update({"agent_id": agent_id, "destination_uri": destination_uri, "event_time": datetime.now().isoformat()})
 
                     if producer:
                         producer.send(KAFKA_TOPIC, json.dumps(data).encode('utf-8'))

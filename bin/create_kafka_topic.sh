@@ -1,0 +1,1 @@
+docker exec -it broker /opt/kafka/bin/kafka-topics.sh --create --topic chunks --bootstrap-server broker:29092
